@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, 'feature/*' ]
   pull_request:
     branches: [ master ]
 
@@ -22,6 +22,18 @@ jobs:
       
       - uses: actions/checkout@v2
 
+      # Install Bazelisk via Homebrew so `bazel` is available.
+      - name: Install Bazelisk (Homebrew)
+        run: |
+          brew update
+          brew install bazelisk
+          BAZELISK_PATH="$(which bazelisk || true)"
+          if [ -n "$BAZELISK_PATH" ]; then
+            # attempt to create a stable `bazel` command; try common system locations
+            sudo ln -sf "$BAZELISK_PATH" /usr/local/bin/bazel || sudo ln -sf "$BAZELISK_PATH" /opt/homebrew/bin/bazel || true
+            echo "bazel -> $(which bazel || true)"
+          fi
+
       # Build everything but protobuf targets, which require that the public
       # protobuf distribution be installed.
       - name: build_all
@@ -30,3 +42,8 @@ jobs:
       # Test command-line tools.
       - name: test_tools
         run: $MAKE_CMD JAVA_HOME=$JAVA_21_HOME test_translator test_cycle_finder test_jre_cycles
+
+      # Test Bazel build by running translator's tests target. This target
+      # has dependencies on the rest of the current Bazel targets.
+      - name: test_bazel_build
+        run: JAVA_HOME=$JAVA_21_HOME bazel test translator:tests
